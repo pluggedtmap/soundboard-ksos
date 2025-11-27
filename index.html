@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ma Soundboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Empêcher la sélection de texte sur mobile pour une sensation plus "app" */
+        body {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            -khtml-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            touch-action: manipulation;
+        }
+        
+        /* Effet de pression réaliste */
+        .btn-press:active {
+            transform: scale(0.95);
+            filter: brightness(0.9);
+        }
+
+        /* Animation de chargement */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Animation de mise en évidence (pour la suggestion IA) */
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 255, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+        }
+        .highlight-ai {
+            animation: pulse-ring 1.5s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+            border: 2px solid white;
+            z-index: 10;
+        }
+
+        /* Style du slider personnalisé */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #4b5563;
+            border-radius: 2px;
+        }
+
+        /* Barre de progression pour l'appui long */
+        .long-press-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 4px;
+            background-color: #ef4444; /* Rouge */
+            width: 0%;
+            transition: width 0s;
+        }
+        .pressing .long-press-bar {
+            width: 100%;
+            transition: width 5s linear; /* Durée de 5 secondes comme demandé */
+        }
+        
+        /* Indicateur visuel qu'un son est en boucle */
+        .is-looping {
+            border: 4px solid #ef4444 !important; /* Bordure rouge */
+            animation: pulse-red 1s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center font-sans pb-32">
+
+    <!-- Bulle titre discrète -->
+    <div class="fixed top-6 z-20 bg-gray-800/80 backdrop-blur px-5 py-2 rounded-full border border-gray-700 shadow-xl flex items-center gap-2">
+        <span class="text-sm font-bold text-gray-200 uppercase tracking-widest">Classique KSOS</span>
+    </div>
+
+    <!-- Bouton Ouvrir Menu IA -->
+    <button onclick="toggleAiModal()" class="fixed top-6 right-4 z-20 bg-gradient-to-r from-indigo-500 to-purple-600 p-2 rounded-full shadow-lg btn-press">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+    </button>
+
+    <!-- Grille de boutons -->
+    <main class="w-full max-w-md p-4 mt-20 mb-10 grid grid-cols-2 gap-4" id="button-grid">
+        <!-- Les boutons seront générés ici par le Javascript -->
+    </main>
+
+    <!-- Contrôles Flottants (Vitesse + Stop) -->
+    <div class="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 flex items-center justify-between gap-3 z-40 pointer-events-none">
+        
+        <!-- Panneau Variateur de Vitesse -->
+        <div class="bg-gray-800/90 backdrop-blur border border-gray-700 rounded-2xl p-3 shadow-xl flex-1 flex items-center gap-3 pointer-events-auto">
+            <div class="text-xs font-bold text-gray-400 w-8 text-center" id="speed-display">1.0x</div>
+            <!-- Changement ici : on appelle updateSpeed() au lieu de updateSpeedDisplay() -->
+            <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-full" oninput="updateSpeed()">
+            <!-- Bouton Reset -->
+            <button onclick="resetSpeed()" class="p-2 bg-gray-700 rounded-full hover:bg-gray-600 active:scale-95 transition-all text-gray-300">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 12"/><path d="M3 3v9h9"/></svg>
+            </button>
+        </div>
+
+        <!-- Bouton Stop -->
+        <button onclick="stopAllSounds()" class="bg-red-600 hover:bg-red-700 text-white w-14 h-14 rounded-full shadow-lg shadow-red-900/50 transition-all btn-press flex-shrink-0 flex items-center justify-center border-2 border-red-400/30 pointer-events-auto" aria-label="Stop">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect></svg>
+        </button>
+    </div>
+
+    <!-- Modal IA -->
+    <div id="ai-modal" class="fixed inset-0 bg-black/90 z-50 hidden flex items-end sm:items-center justify-center transition-opacity duration-300">
+        <div class="bg-gray-800 w-full max-w-md p-6 rounded-t-3xl sm:rounded-2xl border-t border-gray-700 sm:border shadow-2xl space-y-6">
+            <div class="flex justify-between items-center border-b border-gray-700 pb-4">
+                <h3 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>
+                    Studio IA Gemini
+                </h3>
+                <button onclick="toggleAiModal()" class="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <!-- Onglets -->
+            <div class="flex bg-gray-900 p-1 rounded-lg">
+                <button onclick="switchTab('tts')" id="tab-tts" class="flex-1 py-2 text-sm rounded-md bg-gray-700 text-white transition-all">Créer une Voix</button>
+                <button onclick="switchTab('suggest')" id="tab-suggest" class="flex-1 py-2 text-sm rounded-md text-gray-400 hover:text-white transition-all">Suggérer un Son</button>
+            </div>
+
+            <!-- Contenu: TTS -->
+            <div id="content-tts" class="space-y-4">
+                <p class="text-sm text-gray-400">Entre un texte et l'IA va générer le son vocal à ajouter à ta grille.</p>
+                <textarea id="tts-input" class="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors" rows="3" placeholder="Ex: C'est pas faux !"></textarea>
+                <button onclick="generateVoice()" id="btn-generate" class="w-full bg-indigo-600 hover:bg-indigo-700 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+                    <span>Générer le son</span>
+                </button>
+            </div>
+
+            <!-- Contenu: Suggestion -->
+            <div id="content-suggest" class="space-y-4 hidden">
+                <p class="text-sm text-gray-400">Décris ce qui vient de se passer, l'IA te dira sur quel bouton appuyer.</p>
+                <input type="text" id="suggest-input" class="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors" placeholder="Ex: Il a trébuché sur le tapis">
+                <button onclick="suggestSound()" id="btn-suggest" class="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
+                    <span>Trouver le meilleur son</span>
+                </button>
+            </div>
+
+            <div id="ai-error" class="text-red-400 text-sm text-center hidden"></div>
+        </div>
+    </div>
+
+    <!-- Zone de notification (Toast) -->
+    <div id="toast" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black/80 px-6 py-3 rounded-xl hidden transition-opacity duration-300 pointer-events-none z-50 w-64">
+        <p id="toast-message" class="text-white font-medium text-center"></p>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const apiKey = ""; // La clé API sera injectée automatiquement par l'environnement
+        
+        // Format: { label, color, url, startTime (sec), endTime (sec) }
+        let sounds = [
+            { 
+                label: "Timtronocif", 
+                color: "bg-red-700 shadow-red-700/50 border-2 border-red-500", 
+                url: "https://raw.githubusercontent.com/pluggedtmap/soundboard-ksos/main/TIMTRONOCIF_FREESTYLE.wav",
+                startTime: 15, // Commence à 15 secondes
+                endTime: 23    // S'arrête à 23 secondes
+            },
+            { label: "Applaudissements", color: "bg-blue-500 shadow-blue-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" },
+            { label: "Rire", color: "bg-green-500 shadow-green-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3" },
+            { label: "Drum Roll", color: "bg-yellow-500 shadow-yellow-500/50 text-black", url: "https://assets.mixkit.co/active_storage/sfx/2006/2006-preview.mp3" },
+            { label: "Victoire !", color: "bg-purple-500 shadow-purple-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" },
+            { label: "Échec", color: "bg-red-500 shadow-red-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" }
+        ];
+
+        const grid = document.getElementById('button-grid');
+        let activeAudios = [];
+        let pressTimer = null; // Timer pour l'appui long
+
+        function renderButtons() {
+            grid.innerHTML = '';
+            sounds.forEach((sound, index) => {
+                const btn = document.createElement('button');
+                btn.className = `${sound.color} aspect-square rounded-2xl flex flex-col items-center justify-center p-4 shadow-lg transition-all btn-press relative overflow-hidden group select-none`;
+                btn.id = `btn-${index}`;
+                // Empêcher le menu contextuel (clic droit/appui long natif)
+                btn.oncontextmenu = function(event) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return false;
+                };
+                
+                btn.innerHTML = `
+                    <span class="text-xl font-bold break-words w-full pointer-events-none relative z-10">${sound.label}</span>
+                    <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 transition-opacity pointer-events-none"></div>
+                    <!-- Barre de progression pour appui long -->
+                    <div class="long-press-bar"></div>
+                `;
+                
+                // --- GESTION APPUI LONG (Loop) ---
+                
+                const startPress = (e) => {
+                    // Si c'est du tactile, empêcher le comportement par défaut parfois
+                    // e.preventDefault(); // Attention: empêche le scroll si pas géré
+                    
+                    // Réinitialiser tout timer existant
+                    if (pressTimer) clearTimeout(pressTimer);
+                    
+                    // Ajouter classe visuelle pour lancer l'animation CSS de 5s
+                    btn.classList.add('pressing');
+                    
+                    // Démarrer le chrono de 5 secondes
+                    pressTimer = setTimeout(() => {
+                        // 5 secondes écoulées !
+                        triggerLoop(sound, btn);
+                        pressTimer = null; // Reset
+                        btn.classList.remove('pressing'); // Arrêter l'anim
+                    }, 5000);
+                };
+
+                const endPress = (e) => {
+                    if (pressTimer) {
+                        // On a relâché AVANT les 5 secondes -> C'est un clic normal
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                        btn.classList.remove('pressing');
+                        
+                        // Jouer le son normalement (pas de loop)
+                        playSound(sound, false, btn);
+                    } else {
+                        // Le timer est null, ça veut dire que le loop s'est déjà déclenché
+                        // On nettoie juste la classe visuelle au cas où
+                        btn.classList.remove('pressing');
+                    }
+                };
+                
+                const cancelPress = () => {
+                     if (pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                        btn.classList.remove('pressing');
+                    }
+                };
+
+                // Événements souris
+                btn.addEventListener('mousedown', startPress);
+                btn.addEventListener('mouseup', endPress);
+                btn.addEventListener('mouseleave', cancelPress);
+
+                // Événements tactiles
+                btn.addEventListener('touchstart', startPress, {passive: true});
+                btn.addEventListener('touchend', endPress);
+                btn.addEventListener('touchcancel', cancelPress);
+                
+                grid.appendChild(btn);
+            });
+        }
+
+        // Fonction déclenchée après 5s de maintien
+        function triggerLoop(sound, btnElement) {
+            showToast("🔄 Mode Boucle Activé !");
+            playSound(sound, true, btnElement);
+        }
+
+        function playSound(sound, isLoop = false, btnElement = null) {
+            if (!sound.url) { showToast(`⚠️ Lien manquant pour "${sound.label}"`); return; }
+            
+            const audio = new Audio(sound.url);
+            
+            // --- GESTION LOOP ---
+            if (isLoop) {
+                audio.loop = true;
+                if (btnElement) {
+                    btnElement.classList.add('is-looping');
+                }
+            }
+
+            // --- GESTION DE LA VITESSE (PITCH) ---
+            const speedSlider = document.getElementById('speed-slider');
+            const rate = parseFloat(speedSlider.value);
+            
+            audio.playbackRate = rate;
+            
+            // Astuce pour changer le pitch
+            if (audio.preservesPitch !== undefined) audio.preservesPitch = false;
+            if (audio.mozPreservesPitch !== undefined) audio.mozPreservesPitch = false;
+            if (audio.webkitPreservesPitch !== undefined) audio.webkitPreservesPitch = false;
+
+            // Start Time
+            if (sound.startTime) {
+                audio.currentTime = sound.startTime;
+            }
+
+            activeAudios.push({ audio: audio, btn: btnElement });
+
+            // End Time (Seulement si PAS en loop, ou si besoin de boucle custom)
+            // Note: Pour une boucle parfaite sur un segment (ex: 0:15 à 0:23), il faut une logique spéciale
+            if (sound.endTime) {
+                audio.ontimeupdate = () => {
+                    if (audio.currentTime >= sound.endTime) {
+                        if (isLoop) {
+                            // Si loop activé, on revient au début du segment
+                            audio.currentTime = sound.startTime || 0;
+                            audio.play(); 
+                        } else {
+                            // Sinon on arrête
+                            audio.pause();
+                            audio.currentTime = sound.startTime || 0; 
+                            cleanupAudio(audio);
+                        }
+                    }
+                };
+            }
+
+            audio.onended = () => { 
+                if (!isLoop) cleanupAudio(audio); 
+            };
+            
+            audio.onerror = () => { showToast(`❌ Erreur de lecture`); };
+            
+            audio.play().catch(e => { showToast("🔊 Activer l'audio"); });
+            
+            // Toast
+            if (!isLoop) { // Ne pas spammer le toast en loop
+                let icon = "🔊";
+                if(rate > 1.2) icon = "🐿️"; 
+                if(rate < 0.8) icon = "👹"; 
+                showToast(`${icon} Lecture : ${sound.label}`);
+            }
+        }
+        
+        function cleanupAudio(audioObj) {
+            // Trouver l'entrée dans activeAudios
+            const index = activeAudios.findIndex(item => item.audio === audioObj);
+            if (index > -1) {
+                const item = activeAudios[index];
+                // Retirer le style visuel de loop si présent
+                if (item.btn) item.btn.classList.remove('is-looping');
+                activeAudios.splice(index, 1);
+            }
+        }
+
+        function stopAllSounds() {
+            activeAudios.forEach(item => { 
+                item.audio.pause(); 
+                item.audio.currentTime = 0; 
+                item.audio.ontimeupdate = null;
+                // Retirer style visuel
+                if (item.btn) item.btn.classList.remove('is-looping');
+            });
+            activeAudios = [];
+            
+            document.querySelectorAll('button').forEach(b => {
+                b.classList.remove('highlight-ai');
+                b.classList.remove('pressing'); // Au cas où on stop pendant l'appui
+                if(pressTimer) clearTimeout(pressTimer);
+            });
+            showToast("🛑 Silence !");
+        }
+
+        // --- GESTION DU SLIDER EN TEMPS RÉEL ---
+        function updateSpeed() {
+            const slider = document.getElementById('speed-slider');
+            const display = document.getElementById('speed-display');
+            const rate = parseFloat(slider.value);
+            
+            // 1. Mettre à jour l'affichage du texte
+            display.innerText = slider.value + 'x';
+
+            // 2. Appliquer la nouvelle vitesse à TOUS les sons en cours de lecture
+            activeAudios.forEach(item => {
+                item.audio.playbackRate = rate;
+                
+                // S'assurer que le pitch change aussi (effet chipmunk/démon)
+                if (item.audio.preservesPitch !== undefined) item.audio.preservesPitch = false;
+                if (item.audio.mozPreservesPitch !== undefined) item.audio.mozPreservesPitch = false;
+                if (item.audio.webkitPreservesPitch !== undefined) item.audio.webkitPreservesPitch = false;
+            });
+        }
+
+        // Ancienne fonction remplacée par updateSpeed, mais gardée pour compatibilité si besoin
+        function updateSpeedDisplay() {
+            updateSpeed();
+        }
+
+        function resetSpeed() {
+            const slider = document.getElementById('speed-slider');
+            slider.value = 1.0;
+            updateSpeed(); // Met à jour l'affichage ET les sons actifs
+            showToast("Vitesse normale (1.0x)");
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const msg = document.getElementById('toast-message');
+            msg.innerText = message;
+            toast.classList.remove('hidden', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+                setTimeout(() => toast.classList.add('hidden'), 300);
+            }, 2000);
+        }
+
+        // --- LOGIQUE IA ---
+
+        function toggleAiModal() {
+            const modal = document.getElementById('ai-modal');
+            const isHidden = modal.classList.contains('hidden');
+            if (isHidden) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.classList.remove('opacity-0'), 10);
+            } else {
+                modal.classList.add('opacity-0');
+                setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+        }
+
+        function switchTab(tab) {
+            const ttsContent = document.getElementById('content-tts');
+            const suggestContent = document.getElementById('content-suggest');
+            const tabTts = document.getElementById('tab-tts');
+            const tabSuggest = document.getElementById('tab-suggest');
+
+            if (tab === 'tts') {
+                ttsContent.classList.remove('hidden');
+                suggestContent.classList.add('hidden');
+                tabTts.classList.replace('text-gray-400', 'text-white');
+                tabTts.classList.replace('bg-transparent', 'bg-gray-700');
+                tabTts.classList.add('bg-gray-700');
+                tabSuggest.classList.remove('bg-gray-700', 'text-white');
+                tabSuggest.classList.add('text-gray-400');
+            } else {
+                ttsContent.classList.add('hidden');
+                suggestContent.classList.remove('hidden');
+                tabSuggest.classList.replace('text-gray-400', 'text-white');
+                tabSuggest.classList.add('bg-gray-700');
+                tabTts.classList.remove('bg-gray-700', 'text-white');
+                tabTts.classList.add('text-gray-400');
+            }
+        }
+
+        // 1. TEXT TO SPEECH
+        async function generateVoice() {
+            const input = document.getElementById('tts-input');
+            const text = input.value.trim();
+            const btn = document.getElementById('btn-generate');
+            const errorDiv = document.getElementById('ai-error');
+
+            if (!text) return;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<div class="loader"></div> Génération...`;
+            btn.disabled = true;
+            errorDiv.classList.add('hidden');
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: text }] }],
+                        generationConfig: {
+                            responseModalities: ["AUDIO"],
+                            speechConfig: {
+                                voiceConfig: {
+                                    prebuiltVoiceConfig: { voiceName: "Puck" }
+                                }
+                            }
+                        }
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) throw new Error(data.error?.message || "Erreur API");
+
+                const audioContent = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+                
+                if (audioContent) {
+                    const audioBlob = pcm16ToWav(audioContent);
+                    const audioUrl = URL.createObjectURL(audioBlob);
+
+                    sounds.push({
+                        label: text.length > 15 ? text.substring(0, 12) + "..." : text,
+                        color: "bg-indigo-600 shadow-indigo-600/50 border-2 border-indigo-400",
+                        url: audioUrl
+                    });
+
+                    renderButtons();
+                    toggleAiModal();
+                    showToast("✨ Son généré avec succès !");
+                    input.value = "";
+                    
+                    setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 300);
+                } else {
+                    throw new Error("Pas d'audio dans la réponse");
+                }
+
+            } catch (err) {
+                console.error(err);
+                errorDiv.innerText = "Erreur: " + err.message;
+                errorDiv.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // 2. SUGGESTION DE SON
+        async function suggestSound() {
+            const input = document.getElementById('suggest-input');
+            const situation = input.value.trim();
+            const btn = document.getElementById('btn-suggest');
+            const errorDiv = document.getElementById('ai-error');
+
+            if (!situation) return;
+
+            btn.innerHTML = `<div class="loader"></div> Recherche...`;
+            btn.disabled = true;
+            errorDiv.classList.add('hidden');
+
+            try {
+                const soundLabels = sounds.map((s, i) => `${i}: ${s.label}`).join(", ");
+                const prompt = `L'utilisateur est dans cette situation : "${situation}".
+                Voici la liste des sons disponibles sur sa soundboard : [${soundLabels}].
+                Quel est le meilleur son (le plus drôle ou approprié) à jouer ?
+                Réponds UNIQUEMENT par le numéro de l'index (ex: "3").`;
+
+                const result = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }]
+                    })
+                });
+
+                const data = await result.json();
+                const textResponse = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                const index = parseInt(textResponse);
+
+                if (!isNaN(index) && index >= 0 && index < sounds.length) {
+                    toggleAiModal();
+                    showToast(`💡 Suggestion : ${sounds[index].label}`);
+                    
+                    const targetBtn = document.getElementById(`btn-${index}`);
+                    if (targetBtn) {
+                        document.querySelectorAll('button').forEach(b => b.classList.remove('highlight-ai'));
+                        
+                        targetBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetBtn.classList.add('highlight-ai');
+                        
+                        setTimeout(() => targetBtn.classList.remove('highlight-ai'), 5000);
+                    }
+                } else {
+                    throw new Error("L'IA n'a pas trouvé de correspondance claire.");
+                }
+
+            } catch (err) {
+                errorDiv.innerText = "Erreur lors de la suggestion.";
+                errorDiv.classList.remove('hidden');
+            } finally {
+                btn.innerHTML = `<span>Trouver le meilleur son</span>`;
+                btn.disabled = false;
+            }
+        }
+
+        // --- UTILITAIRE AUDIO (PCM Base64 vers WAV Blob) ---
+        function pcm16ToWav(base64PCM) {
+            const binaryString = atob(base64PCM);
+            const len = binaryString.length;
+            const buffer = new ArrayBuffer(len);
+            const view = new Uint8Array(buffer);
+            for (let i = 0; i < len; i++) {
+                view[i] = binaryString.charCodeAt(i);
+            }
+
+            const numChannels = 1;
+            const sampleRate = 24000;
+            const byteRate = sampleRate * numChannels * 2;
+            const blockAlign = numChannels * 2;
+            const wavData = new ArrayBuffer(44 + len);
+            const dataView = new DataView(wavData);
+
+            writeString(dataView, 0, 'RIFF');
+            dataView.setUint32(4, 36 + len, true);
+            writeString(dataView, 8, 'WAVE');
+            writeString(dataView, 12, 'fmt ');
+            dataView.setUint32(16, 16, true); 
+            dataView.setUint16(20, 1, true); 
+            dataView.setUint16(22, numChannels, true);
+            dataView.setUint32(24, sampleRate, true);
+            dataView.setUint32(28, byteRate, true);
+            dataView.setUint16(32, blockAlign, true);
+            dataView.setUint16(34, 16, true);
+            writeString(dataView, 36, 'data');
+            dataView.setUint32(40, len, true);
+
+            const pcmView = new Uint8Array(buffer);
+            const wavView = new Uint8Array(wavData, 44);
+            wavView.set(pcmView);
+
+            return new Blob([wavData], { type: 'audio/wav' });
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        renderButtons();
+    </script>
+</body>
+</html>
