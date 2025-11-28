@@ -84,7 +84,7 @@
         }
         .pressing .long-press-bar {
             width: 100%;
-            transition: width 5s linear; /* Durée de 5 secondes comme demandé */
+            transition: width 5s linear;
         }
         
         /* Indicateur visuel qu'un son est en boucle */
@@ -122,7 +122,7 @@
         <!-- Panneau Variateur de Vitesse -->
         <div class="bg-gray-800/90 backdrop-blur border border-gray-700 rounded-2xl p-3 shadow-xl flex-1 flex items-center gap-3 pointer-events-auto">
             <div class="text-xs font-bold text-gray-400 w-8 text-center" id="speed-display">1.0x</div>
-            <!-- Changement ici : on appelle updateSpeed() au lieu de updateSpeedDisplay() -->
+            <!-- Slider qui met à jour en temps réel avec updateSpeed() -->
             <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-full" oninput="updateSpeed()">
             <!-- Bouton Reset -->
             <button onclick="resetSpeed()" class="p-2 bg-gray-700 rounded-full hover:bg-gray-600 active:scale-95 transition-all text-gray-300">
@@ -141,7 +141,7 @@
         <div class="bg-gray-800 w-full max-w-md p-6 rounded-t-3xl sm:rounded-2xl border-t border-gray-700 sm:border shadow-2xl space-y-6">
             <div class="flex justify-between items-center border-b border-gray-700 pb-4">
                 <h3 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z"/></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
                     Studio IA Gemini
                 </h3>
                 <button onclick="toggleAiModal()" class="text-gray-400 hover:text-white">✕</button>
@@ -193,11 +193,16 @@
                 startTime: 15, // Commence à 15 secondes
                 endTime: 23    // S'arrête à 23 secondes
             },
-            { label: "Applaudissements", color: "bg-blue-500 shadow-blue-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3" },
-            { label: "Rire", color: "bg-green-500 shadow-green-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2003/2003-preview.mp3" },
-            { label: "Drum Roll", color: "bg-yellow-500 shadow-yellow-500/50 text-black", url: "https://assets.mixkit.co/active_storage/sfx/2006/2006-preview.mp3" },
-            { label: "Victoire !", color: "bg-purple-500 shadow-purple-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3" },
-            { label: "Échec", color: "bg-red-500 shadow-red-500/50", url: "https://assets.mixkit.co/active_storage/sfx/2020/2020-preview.mp3" }
+            {
+                label: "My Shela Bastien",
+                color: "bg-purple-600 shadow-purple-600/50",
+                url: "https://raw.githubusercontent.com/pluggedtmap/soundboard-ksos/main/Mysheila.m4a"
+            },
+            {
+                label: "Je baise steff 🤓",
+                color: "bg-green-600 shadow-green-600/50",
+                url: "https://raw.githubusercontent.com/pluggedtmap/soundboard-ksos/main/Snapchat-1583683297_1.mp3"
+            }
         ];
 
         const grid = document.getElementById('button-grid');
@@ -321,7 +326,6 @@
             activeAudios.push({ audio: audio, btn: btnElement });
 
             // End Time (Seulement si PAS en loop, ou si besoin de boucle custom)
-            // Note: Pour une boucle parfaite sur un segment (ex: 0:15 à 0:23), il faut une logique spéciale
             if (sound.endTime) {
                 audio.ontimeupdate = () => {
                     if (audio.currentTime >= sound.endTime) {
@@ -348,7 +352,7 @@
             audio.play().catch(e => { showToast("🔊 Activer l'audio"); });
             
             // Toast
-            if (!isLoop) { // Ne pas spammer le toast en loop
+            if (!isLoop) {
                 let icon = "🔊";
                 if(rate > 1.2) icon = "🐿️"; 
                 if(rate < 0.8) icon = "👹"; 
@@ -357,11 +361,9 @@
         }
         
         function cleanupAudio(audioObj) {
-            // Trouver l'entrée dans activeAudios
             const index = activeAudios.findIndex(item => item.audio === audioObj);
             if (index > -1) {
                 const item = activeAudios[index];
-                // Retirer le style visuel de loop si présent
                 if (item.btn) item.btn.classList.remove('is-looping');
                 activeAudios.splice(index, 1);
             }
@@ -372,14 +374,13 @@
                 item.audio.pause(); 
                 item.audio.currentTime = 0; 
                 item.audio.ontimeupdate = null;
-                // Retirer style visuel
                 if (item.btn) item.btn.classList.remove('is-looping');
             });
             activeAudios = [];
             
             document.querySelectorAll('button').forEach(b => {
                 b.classList.remove('highlight-ai');
-                b.classList.remove('pressing'); // Au cas où on stop pendant l'appui
+                b.classList.remove('pressing');
                 if(pressTimer) clearTimeout(pressTimer);
             });
             showToast("🛑 Silence !");
@@ -405,15 +406,10 @@
             });
         }
 
-        // Ancienne fonction remplacée par updateSpeed, mais gardée pour compatibilité si besoin
-        function updateSpeedDisplay() {
-            updateSpeed();
-        }
-
         function resetSpeed() {
             const slider = document.getElementById('speed-slider');
             slider.value = 1.0;
-            updateSpeed(); // Met à jour l'affichage ET les sons actifs
+            updateSpeed();
             showToast("Vitesse normale (1.0x)");
         }
 
@@ -641,3 +637,5 @@
     </script>
 </body>
 </html>
+
+
